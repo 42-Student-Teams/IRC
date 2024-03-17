@@ -22,6 +22,9 @@ class Client
         std::string getNickname() const;
         std::string getUsername() const;
 
+        void setNickname(const std::string& nick);
+        void setUsername(const std::string& user);
+
     
 
 
