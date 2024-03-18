@@ -98,10 +98,13 @@ void Server::acceptNewConnection()
     Client* newClient = new Client(clientSock, "defaultNickname", "defaultUsername");
     _users[clientSock] = newClient;*/
 
-    std::cout << "New connection accepted: FD= " << clientSock << std::endl;
+    std::cout << "New connection accepted: User FD attribuated => " << clientSock << std::endl;
 
-    const char* welcomeMsg = "Welcom to IRC server, please enter your nickname and username in order to enter in the server, cmd:  NICK, USER\r\n";
+    const char* welcomeMsg = "Welcome to the IRC server. Please register by sending the NICK and USER commands.\r\n";
     send(clientSock, welcomeMsg, strlen(welcomeMsg), 0);
+
+    // Log du nombre de connexions après acceptation de la nouvelle connexion
+    std::cout << "Total Client_Users connected: " << _users.size() + 1 << std::endl; // +1 car _users n'est pas encore mis à jour
 }
 
 void Server::handleClient(int fd)
@@ -140,6 +143,8 @@ void Server::closeClient(int fd)
     {
         Client* user = _users[fd];
 
+        std::cout << "Client \"" << user->getNickname() << "\" disconnected: FD= " << fd << std::endl;
+
         // Fermeture de la connexion réseau
         shutdown(fd, SHUT_RDWR);
         close(fd);
@@ -150,9 +155,16 @@ void Server::closeClient(int fd)
         for (it = channels.begin(); it != channels.end(); ++it)
             it->second->removeClient(fd);
 
-        // Supprime le client de la map des utilisateurs et libère la mémoire
+        /* Supprime le client de la map des utilisateurs et libère la mémoire
         delete _users[fd];
-        _users.erase(fd);
+        _users.erase(fd);*/
+        if (_users.find(fd) != _users.end()) 
+        {
+            delete _users[fd];
+            _users.erase(fd);
+        }
+
+        std::cout << "Total clients connected: " << _users.size() << std::endl;
     }
 }
 
@@ -172,6 +184,15 @@ void Server::handleClientMessage(int fd, const std::string& message)
     std::string command = message.substr(0, message.find(' '));
     std::string param = extractCommandParam(message);
 
+      if (command != "NICK" && command != "USER" && command != "QUIT") {
+        // Vérifie si l'utilisateur est enregistré
+        if (_users.find(fd) == _users.end() || (_users[fd]->getNickname().empty() || _users[fd]->getUsername().empty())) {
+            const char* errMsg = "You must register first with NICK and USER commands.\r\n";
+            send(fd, errMsg, strlen(errMsg), 0);
+            return; // Empêcher l'exécution des commandes si l'utilisateur n'est pas enregistré
+        }
+    }
+
     // Indique si les informations du client ont été mises à jour lors de cette commande
     bool userInfoUpdated = false;
 
@@ -186,6 +207,14 @@ void Server::handleClientMessage(int fd, const std::string& message)
         _tempUserInfo[fd].second = param;
         userInfoUpdated = true;
     }
+    else if (command == "QUIT") 
+    {
+        const char* quitMsg = "Vous quittez le serveur. Au revoir!\r\n";
+            send(fd, quitMsg, strlen(quitMsg), 0); // Envoyer le message de déconnexion
+            closeClient(fd); // Fermer la connexion + nettoyage
+        return;
+    }
+
 
     // Vérifier si les deux informations NICK et USER sont présentes pour ce client
     if (!_tempUserInfo[fd].first.empty() && !_tempUserInfo[fd].second.empty())
