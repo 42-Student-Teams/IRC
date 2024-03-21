@@ -107,35 +107,42 @@ void Server::acceptNewConnection()
     std::cout << "Total Client_Users connected: " << _users.size() + 1 << std::endl; // +1 car _users n'est pas encore mis à jour
 }
 
-void Server::handleClient(int fd)
-{
+
+
+void Server::handleClient(int fd) {
     char buffer[1024];
     memset(buffer, 0, sizeof(buffer));
 
-    int nbytes = recv(fd, buffer, sizeof(buffer) - 1, 0); // -1 pour garantir la terminaison de la chaîne
-    if (nbytes <= 0)
-    {
-        if (nbytes == 0)
-            std::cout << "USER FD= " << fd << " déconnecté." << std::endl;
-        else
-            std::cerr << "ERROR: user could not be reached FD= " << fd << std::endl;
-        closeClient(fd); // Gère la fermeture et la suppression du client
-    }
-     else
-    {
-        // mise a jour sur null char 
+    int nbytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
+    if (nbytes <= 0) {
+        if (nbytes == 0) {
+            std::cout << "USER FD=" << fd << " disconnected." << std::endl;
+        } else {
+            std::cerr << "Error: Reading from client FD=" << fd << " failed." << std::endl;
+        }
+        closeClient(fd);
+    } else {
         buffer[nbytes] = '\0';
-        std::string message(buffer);
-        // Supprimez les caractères de retour chariot et de nouvelle ligne
-        message.erase(std::remove(message.begin(), message.end(), '\r'), message.end());
-        message.erase(std::remove(message.begin(), message.end(), '\n'), message.end());
+        _commandFragments[fd] += std::string(buffer);
 
-        std::cout << "Message received from Client FD => " << fd << ": " << message << std::endl;
-
-        // Traitement des commandes
-        handleClientMessage(fd, message);
+        if (_commandFragments[fd].find('\n') != std::string::npos) {
+            std::string fullCommand = _commandFragments[fd];
+            // Nettoi après avoir détecté une commande complète
+            _commandFragments[fd].clear();
+            
+            // Vérifie si la commande == QUIT avant de traiter d'autres commandes
+            if (fullCommand.find("QUIT") != std::string::npos) {
+                const char* quitMsg = "Vous quittez le serveur. Au revoir!\r\n";
+                send(fd, quitMsg, strlen(quitMsg), 0);
+                closeClient(fd);
+                return;
+            }
+            // Traitement d'autres commandes complètes
+            handleClientMessage(fd, fullCommand);
+        }
     }
 }
+
 
 void Server::closeClient(int fd)
 {
@@ -189,7 +196,7 @@ void Server::handleClientMessage(int fd, const std::string& message)
         if (_users.find(fd) == _users.end() || (_users[fd]->getNickname().empty() || _users[fd]->getUsername().empty())) {
             const char* errMsg = "You must register first with NICK and USER commands.\r\n";
             send(fd, errMsg, strlen(errMsg), 0);
-            return; // Empêcher l'exécution des commandes si l'utilisateur n'est pas enregistré
+            return; // Empêchel'exécution des commandes si l'utilisateur n'est pas enregistré
         }
     }
 
@@ -207,16 +214,8 @@ void Server::handleClientMessage(int fd, const std::string& message)
         _tempUserInfo[fd].second = param;
         userInfoUpdated = true;
     }
-    else if (command == "QUIT") 
-    {
-        const char* quitMsg = "Vous quittez le serveur. Au revoir!\r\n";
-            send(fd, quitMsg, strlen(quitMsg), 0); // Envoyer le message de déconnexion
-            closeClient(fd); // Fermer la connexion + nettoyage
-        return;
-    }
 
-
-    // Vérifier si les deux informations NICK et USER sont présentes pour ce client
+    // Vérifie si les deux informations NICK et USER sont présentes pour ce client
     if (!_tempUserInfo[fd].first.empty() && !_tempUserInfo[fd].second.empty())
     {
         bool isNewUser = _users.find(fd) == _users.end();

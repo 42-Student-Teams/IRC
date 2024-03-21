@@ -6,7 +6,7 @@
 /*   By: inaranjo <inaranjo <inaranjo@student.42    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/03/12 14:59:00 by inaranjo          #+#    #+#             */
-/*   Updated: 2024/03/17 09:46:48 by inaranjo         ###   ########.fr       */
+/*   Updated: 2024/03/21 10:08:31 by inaranjo         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -39,6 +39,7 @@ class Server
         std::vector<struct pollfd> _fds; // Pour la gestion avec poll
         std::map<int, Client*> _users; // Map des clients, clé = descripteur de fichier
         std::map<std::string, Channel*> channels; // Canaux disponibles sur le serveur
+        std::map<int, std::string> _commandFragments; // fd -> fragments de commande accumulés
         std::map<int, std::pair<std::string, std::string> > _tempUserInfo;
 
         void initServer(); // Initialisation du serveur
